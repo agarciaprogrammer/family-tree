@@ -1,65 +1,78 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { PersonModal } from "@/components/PersonModal";
+import { TreeGraph } from "@/components/TreeGraph";
+import { useFamilyTree } from "@/hooks/useFamilyTree";
+import type { ParentType, PersonDraft } from "@/types/family";
+
+type ModalState =
+  | { kind: "closed" }
+  | { kind: "create"; childId: string; parentType: ParentType }
+  | { kind: "edit"; personId: string };
+
+const closedModal: ModalState = { kind: "closed" };
 
 export default function Home() {
+  const { people, rootId, isReady, addParent, updatePerson, deletePerson } = useFamilyTree();
+  const [modalState, setModalState] = useState<ModalState>(closedModal);
+
+  const handleModalSubmit = (draft: PersonDraft) => {
+    if (modalState.kind === "create") {
+      addParent(modalState.childId, modalState.parentType, draft);
+    } else if (modalState.kind === "edit") {
+      updatePerson(modalState.personId, draft);
+    }
+    setModalState(closedModal);
+  };
+
+  const personBeingEdited =
+    modalState.kind === "edit" && people[modalState.personId] ? people[modalState.personId] : undefined;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="app-shell">
+      <header className="app-toolbar">
+        <div className="title-group">
+          <h1>Family Tree</h1>
+          <p>Interactive vertical ancestry graph with local persistence.</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </header>
+
+      <TreeGraph
+        rootId={rootId}
+        people={people}
+        onAddParent={(childId, parentType) => setModalState({ kind: "create", childId, parentType })}
+        onEditPerson={(personId) => setModalState({ kind: "edit", personId })}
+        onDeletePerson={(personId) => {
+          const personName = people[personId]?.name ?? "this person";
+          const isRoot = personId === rootId;
+          const message = isRoot
+            ? "Delete the root person and reset the tree to a fresh root?"
+            : `Delete ${personName} and remove this branch from the tree?`;
+
+          if (window.confirm(message)) {
+            deletePerson(personId);
+          }
+        }}
+      />
+
+      <PersonModal
+        key={
+          modalState.kind === "create"
+            ? `create-${modalState.childId}-${modalState.parentType}`
+            : modalState.kind === "edit"
+              ? `edit-${modalState.personId}`
+              : "closed"
+        }
+        isOpen={modalState.kind !== "closed"}
+        mode={modalState.kind === "edit" ? "edit" : "create"}
+        parentType={modalState.kind === "create" ? modalState.parentType : undefined}
+        person={personBeingEdited}
+        onClose={() => setModalState(closedModal)}
+        onSubmit={handleModalSubmit}
+      />
+
+      {!isReady ? <p className="loading-note">Loading saved tree...</p> : null}
     </div>
   );
 }
